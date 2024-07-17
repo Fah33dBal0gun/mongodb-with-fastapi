@@ -1,7 +1,11 @@
 import os
 from typing import Optional, List
 
-from fastapi import FastAPI, Body, HTTPException, status
+from fastapi import FastAPI, Body, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
+from .routers import books
+from app.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from fastapi.responses import Response
 from pydantic import ConfigDict, BaseModel, Field, EmailStr
 from pydantic.functional_validators import BeforeValidator
@@ -11,12 +15,32 @@ from typing_extensions import Annotated
 from bson import ObjectId
 import motor.motor_asyncio
 from pymongo import ReturnDocument
-
+from app.routers import books
 
 app = FastAPI(
     title="Student Course API",
     summary="A sample application showing how to use FastAPI to add a ReST API to a MongoDB collection.",
 )
+
+app.include_router(books.router)
+
+@app.post("/token")
+async def login(form_data:OAuth2PasswordRequestForm = Depends()):
+    #this is normally verify the user's credentials
+    user_dict = {"username": form_data.username}
+    if form_data.username != "test" or form_data.password != "password":
+        raise HTTPException(
+
+status_code=status.HTTP_401_UNAUTHORIZED,
+           detail="Incorrect username or password",
+           headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token =create_access_token(
+        data={"sub": user_dict["username"]},
+        expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 client = motor.motor_asyncio.AsyncIOMotorClient(os.environ["MONGODB_URL"])
 db = client.college
 student_collection = db.get_collection("students")
